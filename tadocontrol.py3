@@ -3,6 +3,9 @@ import schedule
 import time
 import sqlite3 as lite
 
+# Temperature in degrees Celsius
+# Entries 1-7 set home temperature at 00:01 on that day
+# Entry 8 sets home temperature at 16:00 every day, allowing a higher evening temperature
 temperatureDefaults = (
     (1, 'Monday', '18.0'),
     (2, 'Tuesday','18.0'),
@@ -13,8 +16,11 @@ temperatureDefaults = (
     (7, 'Sunday', '19.7'), 
     (8,  'Evening', '19.7')
 )
+
+# Tado username and password
 user = "USERNAME"
 passw = "PASSWORD"
+
 h = httplib2.Http(".cache")
 con = lite.connect('temperatures.db')
 
@@ -36,6 +42,8 @@ def setHomeTemp(id):
 
 def sendHomeTemp(newTemp):
     (resp_headers, content) = h.request("https://my.tado.com/mobile/1.4/updateThermostatSettings?username=" + user + "&password=" + passw + "&homeTemp=" + newTemp,  "GET", headers={'cache-control':'no-cache'})
+
+# Following print statements are for debugging purposes to show temperature is changing at desired time
     print(time.ctime())
     print(content)
 
@@ -46,6 +54,8 @@ schedule.every().thursday.at("00:01").do(setHomeTemp, 4)
 schedule.every().friday.at("00:01").do(setHomeTemp, 5)
 schedule.every().saturday.at("00:01").do(setHomeTemp, 6)
 schedule.every().sunday.at("00:01").do(setHomeTemp, 7)
+
+# Change 16:00 to desired time for evening temperature to begin (24 hour format)
 schedule.every().day.at("16:00").do(setHomeTemp, 8)
 
 while True:
