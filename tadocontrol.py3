@@ -1,4 +1,4 @@
-# Tado multi temperature scheduler script
+# tado multi temperature scheduler script v2.0.2
 # Ian Atkin, January 2015
 # Released under MIT licence
 # Ensure make_table.tpl and temperatures.db are in this script's directory
@@ -8,6 +8,7 @@ import schedule
 import time
 import sqlite3 as lite
 from bottle import Bottle, run, template, request
+import threading
 
 # Temperature in degrees Celsius
 # Entries 1-7 set home temperature at 00:01 on that day (time can be changed below)
@@ -30,9 +31,9 @@ passw = "PASSWORD"
 # Initialises web app and database instances
 webapp = Bottle()
 h = httplib2.Http(".cache")
-con = lite.connect('temperatures.db')
 
 # Populates database with default values
+con = lite.connect('temperatures.db')
 with con:
     cur = con.cursor()    
     cur.execute("DROP TABLE IF EXISTS Temperatures")
@@ -40,8 +41,13 @@ with con:
     cur.executemany("INSERT INTO Temperatures VALUES(?, ?, ?)", temperatureDefaults)
     print ("Default temperatures loaded")
 
+# ---------------------------------
+# Scheduler section
+# ---------------------------------
+
 # When schedule triggers temperature change, finds correct temperature in database
 def setHomeTemp(id):
+    con = lite.connect('temperatures.db')
     with con:
         cur = con.cursor()    
         cur.execute("SELECT SetTemp FROM Temperatures WHERE Id=:Id", {"Id": id})        
@@ -58,21 +64,40 @@ def sendHomeTemp(newTemp):
     print(time.ctime())
     print(content)
 
+# Initialise scheduler instance
+scheduler = schedule.Scheduler()
+
 # Change 00:01 to desired time for daytime temperature to begin each day (24 hour format)
-schedule.every().monday.at("00:01").do(setHomeTemp, 1)
-schedule.every().tuesday.at("00:01").do(setHomeTemp, 2)
-schedule.every().wednesday.at("00:01").do(setHomeTemp, 3)
-schedule.every().thursday.at("00:01").do(setHomeTemp, 4)
-schedule.every().friday.at("00:01").do(setHomeTemp, 5)
-schedule.every().saturday.at("00:01").do(setHomeTemp, 6)
-schedule.every().sunday.at("00:01").do(setHomeTemp, 7)
+scheduler.every().monday.at("00:01").do(setHomeTemp, 1)
+scheduler.every().tuesday.at("00:01").do(setHomeTemp, 2)
+scheduler.every().wednesday.at("00:01").do(setHomeTemp, 3)
+scheduler.every().thursday.at("00:01").do(setHomeTemp, 4)
+scheduler.every().friday.at("00:01").do(setHomeTemp, 5)
+scheduler.every().saturday.at("00:01").do(setHomeTemp, 6)
+scheduler.every().sunday.at("00:01").do(setHomeTemp, 7)
 
 # Change 16:00 to desired time for evening temperature to begin every day (24 hour format)
-schedule.every().day.at("16:00").do(setHomeTemp, 8)
+scheduler.every().day.at("16:00").do(setHomeTemp, 8)
+
+# Runs scheduler in a separate thread
+class ScheduleThread(threading.Thread):
+    @classmethod
+    def run(cls):
+        while True:
+            scheduler.run_pending()
+            time.sleep(1)
+
+continuous_thread = ScheduleThread()
+continuous_thread.start()
+
+# ---------------------------------
+# Web interface section
+# ---------------------------------
 
 # Calls web interface page, defaults to <hostname>/tado
 @webapp.route('/tado')
 def displayWeb():
+    con = lite.connect('temperatures.db')
     with con:
         cur = con.cursor()    
         cur.execute("SELECT * FROM Temperatures")        
@@ -88,6 +113,7 @@ def edit_item():
     for id in range(1, 9):
         newTemp[id]= request.GET.get(str(id),'').strip()
         print(newTemp[id] + ' ' + str(id))
+        con = lite.connect('temperatures.db')
         with con:
             cur = con.cursor()
             cur.execute("UPDATE temperatures SET SetTemp = ? WHERE id LIKE ?", (newTemp[id],id))
@@ -98,8 +124,3 @@ def edit_item():
 # Set interface and port for web interface here (0.0.0.0 = listen on all interfaces)
 # Access web interface at http://<ip address>:<port>/tado
 run(webapp, host='0.0.0.0', port=8080)
-
-# Runs scheduler
-while True:
-    schedule.run_pending()
-    time.sleep(1)
