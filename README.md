@@ -14,6 +14,6 @@ Usage:
 - edit tadocontrol.py3 to set tado username/password, network settings for web interface, temperature and time preferences
 - run tadocontrol.py3 in a terminal to activate
 
-Python package dependencies: bottle, httplib2, schedule, sqllite3, time
+Python package dependencies: bottle, httplib2, schedule, sqllite3, threading, time
 
 Tested with python v3.4.0 only
